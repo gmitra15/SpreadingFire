@@ -4,7 +4,7 @@
 %
 % cs346_final_gm_og.m
 % 
-% Final Project: Cellular automata simulation of fire updateing
+% Final Project: Cellular automata simulation of fire spreading
 %
 % To run: cs346_final_gm_og.m
 
