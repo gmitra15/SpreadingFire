@@ -30,6 +30,9 @@ DIRT = 1; % Dirt cell that doesn't burn
 GRASS = 2; % Grass cell that is not on fire
 TREE = 3;  % Tree cell that is not on fire
 FIRE = 4; % Cell that is on fire
+WET_DIRT = 6;
+WET_GRASS = 7;
+WET_TREE = 8;
 
 prob_init_tree = 0.1; % initial probability a cell is a tree
 prob_init_grass = 0.6; % initial probability a cell is grass
@@ -37,11 +40,12 @@ prob_init_fire = 0.025; % initial probability a tree is on fire
 
 % number of timesteps it takes for cloud to shift one position
 cloud_move_const = 1; % movement constant for rain clouds, higher is slower
-rain_move_speed = 1; % Amount of cells rain can mover per timestep
+rain_move_speed = 2; % Amount of cells rain can mover per timestep
 
 % Time values
 initial_tree_time = 8;
 initial_grass_time = 1;
+rain_wet_time = 25; % How long a cell stays wet (cant be on fire) after it rains
 
 % Percent increase of fire to occur for each N/E/S/W tile thats on fire,
 % e.g. 3 of them on fire = 3*cardinal_fire_chance_increase
@@ -60,10 +64,10 @@ prob_lightning = 0.00005; % probability that a cell spontaneously ignites
 % relatively small
 % Wind direction is what you would use if you were sailing / explaining the
 % weather, i.e. a south wind comes from the south and therefore moves north
-N_wind = 1;
-E_wind = 1;
-S_wind = 1;
-W_wind = 1;
+N_wind = 1/2;
+E_wind = 1/2;
+S_wind = 5;
+W_wind = 1/2;
 
 card_wind_speeds = [S_wind, W_wind, N_wind, E_wind];
 diag_wind_speeds = [S_wind * W_wind, N_wind * W_wind, S_wind * E_wind, N_wind * E_wind];
@@ -78,9 +82,9 @@ fire_col_upper = 100;
 % Boundary values for where to spawn rain, only spawns initially within these 
 % values
 rain_row_lower = 1;
-rain_row_upper = 35;
-rain_col_lower = 1;
-rain_col_upper = 100;
+rain_row_upper = 25;
+rain_col_lower = 35;
+rain_col_upper = 65;
 
 % List of rain boundaries that gets changed/used by rain movement
 boundary_list = [rain_row_lower, rain_row_upper, rain_col_lower, rain_col_upper];
@@ -88,8 +92,9 @@ boundary_list = [rain_row_lower, rain_row_upper, rain_col_lower, rain_col_upper]
 %% Set up forest grid
 % Initialize forest to be all dirt
 forests = ones(row_count, col_count, numIterations) * DIRT;
-time_grids = zeros(row_count, col_count, numIterations);
+burn_time_grids = zeros(row_count, col_count, numIterations);
 rain_grids = ones(row_count, col_count, numIterations);
+wet_time_grids = zeros(row_count, col_count, numIterations);
 
 for row = 1:row_count
     for col = 1:col_count
@@ -97,10 +102,10 @@ for row = 1:row_count
         % Vegetation initialization 
         if rand < prob_init_tree
             forests(row, col, 1) = TREE;
-            time_grids(row, col, 1) = initial_tree_time;
+            burn_time_grids(row, col, 1) = initial_tree_time;
         elseif rand < prob_init_grass
             forests(row, col, 1) = GRASS;
-            time_grids(row, col, 1) = initial_grass_time;
+            burn_time_grids(row, col, 1) = initial_grass_time;
         end
 
         % Fire initilization, can only spawn on vegetation
@@ -136,10 +141,11 @@ for frame = 2:numIterations
     extended_forest(2:end-1, 2:end-1) = forests(:,:,frame-1);
     extended_rain_grid(2:end-1, 2:end-1) = rain_grids(:,:,frame-1);
     
-    time_grid = time_grids(:,:,frame-1);
+    burn_time_grid = burn_time_grids(:,:,frame-1);
+    wet_time_grid = wet_time_grids(:,:,frame-1);
     
     % Rain cloud movement based on the wind
-    if(mod(frame, cloud_move_const) == 0)
+    if(mod(frame, cloud_move_const) == 0 && sum([card_wind_speeds, diag_wind_speeds]) ~= 8)
         % Getting wind direction
         [val, wind_dir] = max([card_wind_speeds, diag_wind_speeds]);
 
@@ -160,7 +166,8 @@ for frame = 2:numIterations
         
             % Von Neumann Neighborhood
             grid_point = extended_forest(row, col);
-            time_grid_point = time_grid(row-1, col-1);
+            burn_time_point = burn_time_grid(row-1, col-1);
+            wet_time_point = wet_time_grid(row-1, col-1);
 
             north = extended_forest(row - 1, col);
             east  = extended_forest(row, col - 1);
@@ -182,21 +189,21 @@ for frame = 2:numIterations
             elseif grid_point == FIRE
                 % If a tile has at least 1 timestep to burn, keep it on fire
                 % and decrement its remaining burn time
-                if(time_grid_point > 0)
+                if(burn_time_point > 0)
                     updated_grid_point = FIRE;
-                    time_grid_point = time_grid_point - 1;
+                    burn_time_point = burn_time_point - 1;
                     
                     % Chance that a TREE gets extinguished if its on fire
-                    if(time_grid_point > 0 && rand < tree_extinguish_chance)
+                    if(burn_time_point > 0 && rand < tree_extinguish_chance)
                         updated_grid_point = TREE;
-                        time_grid_point = time_grid_point + 1;
+                        burn_time_point = burn_time_point + 1;
                     end
                 else %Tile has burned down all the way, no more burn time = dirt
                     updated_grid_point = DIRT;
                 end
 
             % If the cell was a tree, set it on fire or leave it alone
-            elseif grid_point == TREE || grid_point == GRASS
+            elseif (grid_point == TREE || grid_point == GRASS) && wet_time_point <= 0
 
                 % Making arrays of the direction values
                 card_dirs = [north, east, south, west];
@@ -224,28 +231,65 @@ for frame = 2:numIterations
                 if (rand < prob_lightning)
                     updated_grid_point = FIRE;
                 end
+            else
+                updated_grid_point = grid_point;
             end
-            % Place the updated cell into the forests grid
-            % Need to subtract 1 from row and 1 from col to account for the
-            % forest grid being pushed down and to the right by one unit
-            % from the extension
 
             rain_grid_point = rain_grids(row-1, col-1, frame);
-            % Rain putting out fires
+            % Rain putting out fires and updating the wet time matrix values
             is_raining = rain_grid_point == RAIN; % if it is raining on the cell
-            if(updated_grid_point == FIRE && is_raining) % if on fire
-                if(grid_point == GRASS) 
-                    % fire that was grass goes back to grass, essentially never
-                    % igniting
-                    updated_grid_point = GRASS; 
-                else
-                    % Otherwise gets set back to being to true
+            if(is_raining)
+                wet_time_point = rain_wet_time;
+                
+                if(updated_grid_point == FIRE) % if on fire
+                    if(grid_point == GRASS) 
+                        % fire that was grass goes back to grass, essentially never
+                        % igniting
+                        updated_grid_point = GRASS; 
+                    else
+                        % Otherwise gets set back to being to true
+                        updated_grid_point = TREE;
+                    end
+                end
+            else
+                % Decreasing wet time if not raining on this point currently
+                wet_time_point = wet_time_point - 1;
+            end
+            
+            % Setting the cells to their wet variants if they are wet
+            if(wet_time_point > 0)
+                if(updated_grid_point == DIRT)
+                    updated_grid_point = WET_DIRT;
+                end
+                
+                if(updated_grid_point == GRASS)
+                    updated_grid_point = WET_GRASS;
+                end
+                
+                if(updated_grid_point == TREE)
+                    updated_grid_point = WET_TREE;
+                end
+            else % If no longer wet return to their dry state
+                if(updated_grid_point == WET_DIRT)
+                    updated_grid_point = DIRT;
+                end
+                
+                if(updated_grid_point == WET_GRASS)
+                    updated_grid_point = GRASS;
+                end
+                
+                if(updated_grid_point == WET_TREE)
                     updated_grid_point = TREE;
                 end
             end
             
+            % Place the updated cell into the forests grid
+            % Need to subtract 1 from row and 1 from col to account for the
+            % forest grid being pushed down and to the right by one unit
+            % from the extension
             forests(row - 1, col - 1, frame) = updated_grid_point;
-            time_grids(row - 1, col - 1, frame) = time_grid_point;
+            burn_time_grids(row - 1, col - 1, frame) = burn_time_point;
+            wet_time_grids(row - 1, col - 1, frame) = wet_time_point;
         end
     end
 end
@@ -259,18 +303,22 @@ viz_axes = axes(viz_fig);
 
 % Set the colors
 dirt_color = [0.4, 0.2, 0];
-grass_color = [109/255, 168/255, 74/255];
-tree_color = [63/255, 122/255, 77/255];
+grass_color = [109/255, 188/255, 0];
+tree_color = [63/255, 122/255, 0];
 fire_color = [237/255 41/255 57/255];
-colormap(viz_axes, [dirt_color; grass_color; tree_color; fire_color]); % Dirt, Tree, Fire
+wet_dirt_color = [61/255, 47/255, 37/255];
+wet_grass_color = [109/255, 188/255, 100/255];
+wet_tree_color = [63/255, 122/255, 75/255];
+
+colormap(viz_axes, [dirt_color; grass_color; tree_color; fire_color; wet_dirt_color; wet_grass_color; wet_tree_color]); % Dirt, Tree, Fire
 
 % Remove axis labels, make aspect ratio look good, and maintain that state
 axis off;
 axis equal;
 hold on;
 
-%rain_fig = figure;
-rain_axes = axes(viz_fig);
+rain_fig = figure;
+rain_axes = axes(rain_fig);
 
 rain_color = [0, 0, 1];
 dry_color  = [1, 1, 1];
@@ -284,8 +332,9 @@ disp("Drawing...");
 for i = 1:numIterations
     
     % Turn each forest grid into an image
-    im1 = image(viz_axes, forests(:, :, i));
-    im2 = image(rain_axes, rain_grids(:, :, i), "AlphaData",.01);
+    image(viz_axes, forests(:, :, i));
+
+    image(rain_axes, rain_grids(:, :, i));
 
     pause(0.05);
 end
