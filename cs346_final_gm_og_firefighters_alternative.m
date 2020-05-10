@@ -443,7 +443,7 @@ fprintf('\nGrass Spawned: %d/%d',grass_count, row_count*col_count );
 fprintf('\nWhich is %f percent of cells\n', (grass_count/(row_count*col_count))*100);
 
 fire_count = sum(sum(forests(:,:,1)==FIRE));
-fprintf('NOTE: Fire can only spawn on Grass and Tree cells');
+fprintf('\nNOTE: Fire can only spawn on Grass and Tree cells');
 fprintf('\nFire Spawn Prob: %f percent', prob_init_fire*100);
 fprintf('\nFire Spawned: %d/%d',fire_count, tree_count+grass_count );
 fprintf('\nWhich is %f percent of cells\n', (fire_count/(tree_count + grass_count))*100);
