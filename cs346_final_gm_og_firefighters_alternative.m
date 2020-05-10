@@ -15,12 +15,12 @@ rng_set = rng(1);
 
 % Time-related variables
 dt = 1; % timestep
-simLength = 100; % length of simulation
+simLength = 200; % length of simulation
 numIterations = 1 + simLength/dt;
 
 % Grid dimensions
-row_count = 50; % width
-col_count = 50; % length
+row_count = 100; % width
+col_count = 100; % length
 
 %% Constants %%
 DRY = 1;
@@ -34,12 +34,11 @@ WET_DIRT = 5;
 WET_GRASS = 6;
 WET_TREE = 7;
 FIGHTER = 8;
-FIGHTER_MOVE = 9;
 
 prob_init_tree = 0.1; % initial probability a cell is a tree
 prob_init_grass = 0.6; % initial probability a cell is grass
 prob_init_fire = 0.025; % initial probability a tree is on fire
-prob_init_fighter = 0.005; % initial probability fire fighter spawns
+prob_init_fighter = 0.001; % initial probability fire fighter spawns
 
 % number of timesteps it takes for cloud to shift one position
 cloud_move_const = 1; % movement constant for rain clouds, higher is slower
@@ -87,11 +86,11 @@ fire_col_lower = 0;
 fire_col_upper = 100;
 
 % Boundary values for where to spawn rain, only spawns initially within these 
-% values
+% values, should be no lower than 1 and no greater than row/col size
 rain_row_lower = 1;
-rain_row_upper = 1;
-rain_col_lower = 1;
-rain_col_upper = 1;
+rain_row_upper = 25;
+rain_col_lower = 35;
+rain_col_upper = 65;
 
 % List of rain boundaries that gets changed/used by rain movement
 boundary_list = [rain_row_lower, rain_row_upper, rain_col_lower, rain_col_upper];
@@ -105,7 +104,6 @@ wet_time_grids = zeros(row_count, col_count, numIterations);
 
 for row = 1:row_count
     for col = 1:col_count
-
         % Vegetation initialization 
         if rand < prob_init_tree
             forests(row, col, 1) = TREE;
@@ -143,6 +141,7 @@ disp("Forest Initialized");
 
 %% Main Simulation Loop
 for frame = 2:numIterations
+    isfirefighter = false;
     %% Absorbing boundary condition
     % Create a grid thats the size of the forest + 2 on each side
     extended_grid_size = size(forests( : , : , frame-1))+2;
@@ -156,12 +155,13 @@ for frame = 2:numIterations
     
     burn_time_grid = burn_time_grids(:,:,frame-1);
     wet_time_grid = wet_time_grids(:,:,frame-1);
+
     
     % Rain cloud movement based on the wind
     if(mod(frame, cloud_move_const) == 0 && sum([card_wind_speeds, diag_wind_speeds]) ~= 8)
         % Getting wind direction
         [val, wind_dir] = max([card_wind_speeds, diag_wind_speeds]);
-
+        
         % Updating the rain grid
         [updated_rain_grid, b_list] = update_rain(wind_dir, extended_grid_size, boundary_list, RAIN, rain_move_speed);
         % Updating the current boundaries of the rain area
@@ -265,12 +265,6 @@ for frame = 2:numIterations
                 if (rand < prob_lightning)
                     updated_grid_point = FIRE;
                 end    
-                
-            elseif(grid_point == FIGHTER_MOVE)
-                % Makes a FIGHTER_MOVE cell a fighter, this is done so that 
-                % fire fighters dont teleport around sometimes based on the order
-                % the cells in the matrix get checked
-                updated_grid_point = FIGHTER;
             else
                 updated_grid_point = grid_point;
             end
@@ -325,7 +319,7 @@ for frame = 2:numIterations
             end
 
             if(grid_point == FIGHTER)
-
+                isfirefighter = true;
                 % Find the closest fire
 
                 % Create two lists one containing row values of all tiles == to FIRE
@@ -356,48 +350,28 @@ for frame = 2:numIterations
                 new_col = col-1;
                 
                 % Moving the fire fighter
+                new_row = new_row + sign(fire_row - row);
+                new_col = new_col + sign(fire_col - col);
 
-                % While there are moves left the fighter moves closer to the row
-                % and col index of the closest fire (fire_row, fire_col). 
-                % Moves left is equal to the fighter_speed, the loop is here so that
-                % the fighter only moves in increments of one so it does not overshoot
-                % moves_left = fighter_speed;
-                % while(moves_left >1)
-                %     moves_left = moves_left - 1;
 
-                    % if(fire_row ~= row)
-                        new_row = new_row + sign(fire_row - row-1);
-                    % end
+                if(new_row < 1)
+                    new_row = 1;
+                end
 
-                    % if(fire_col ~= col)
-                        new_col = new_col + sign(fire_col - col-1);
-                    % end
-                % end
-
-                %disp(new_row +" : "+ new_col + " : "+ frame);
-
-                % if(new_row < 2)
-                %     new_row = 2;
-                % end
-
-                % if(new_col < 2)
-                %     new_col = 2;
-                % end
-
-                % Sets the location where the fighter will move too to FIGHTER_MOVE
-                % so that after one timestep that spot will become a fighter and 
-                % will continue to move
+                if(new_col < 1)
+                    new_col = 1;
+                end
                 
-                % Sets this spot, where the fighter is moving from, to dirt
-                updated_grid_point = DIRT; 
-                          
+                updated_grid_point = DIRT;     
             end
             % Place the updated cell into the forests grid
             % Need to subtract 1 from row and 1 from col to account for the
             % forest grid being pushed down and to the right by one unit
             % from the extension
             forests(row - 1, col - 1, frame) = updated_grid_point;
-            forests(new_row, new_col, frame) = FIGHTER;
+            if(isfirefighter)
+                forests(new_row, new_col, frame) = FIGHTER;
+            end
             burn_time_grids(row - 1, col - 1, frame) = burn_time_point;
             wet_time_grids(row - 1, col - 1, frame) = wet_time_point;
 
@@ -453,6 +427,27 @@ for i = 1:numIterations
     pause(.05);
 end
 disp("Simulation complete!");
+
+
+% Some Validation Testing Stuff
+
+% Spawn percentages
+tree_count = sum(sum(forests(:,:,1)==TREE));
+fprintf('\nTree Spawn Prob: %f percent', prob_init_tree*100);
+fprintf('\nTrees Spawned: %d/%d',tree_count, row_count*col_count );
+fprintf('\nWhich is %f percent of cells\n', (tree_count/(row_count*col_count))*100);
+
+grass_count = sum(sum(forests(:,:,1)==GRASS));
+fprintf('\nGrass Spawn Prob: %f percent', prob_init_grass*100);
+fprintf('\nGrass Spawned: %d/%d',grass_count, row_count*col_count );
+fprintf('\nWhich is %f percent of cells\n', (grass_count/(row_count*col_count))*100);
+
+fire_count = sum(sum(forests(:,:,1)==FIRE));
+fprintf('NOTE: Fire can only spawn on Grass and Tree cells');
+fprintf('\nFire Spawn Prob: %f percent', prob_init_fire*100);
+fprintf('\nFire Spawned: %d/%d',fire_count, tree_count+grass_count );
+fprintf('\nWhich is %f percent of cells\n', (fire_count/(tree_count + grass_count))*100);
+
 
 function [updated_rain_grid, boundary_list] = update_rain(wind_direction, grid_size, boundary_list, RAIN, move_rate)
     updated_rain_grid = ones(grid_size);
