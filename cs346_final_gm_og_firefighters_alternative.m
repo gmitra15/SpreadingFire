@@ -11,11 +11,11 @@
 %% Simulation Parameters %%%
 
 % Seed the random number generator for testing; saves rng settings to a var
-rng_set = rng(1);
+rng_set = rng(1234567);
 
 % Time-related variables
 dt = 1; % timestep
-simLength = 200; % length of simulation
+simLength = 25; % length of simulation
 numIterations = 1 + simLength/dt;
 
 % Grid dimensions
@@ -38,18 +38,14 @@ FIGHTER = 8;
 prob_init_tree = 0.1; % initial probability a cell is a tree
 prob_init_grass = 0.6; % initial probability a cell is grass
 prob_init_fire = 0.025; % initial probability a tree is on fire
-prob_init_fighter = 0.001; % initial probability fire fighter spawns
+prob_init_fighter = 0.0001; % initial probability fire fighter spawns
 
 % number of timesteps it takes for cloud to shift one position
 cloud_move_const = 1; % movement constant for rain clouds, higher is slower
 rain_move_speed = 2; % Amount of cells rain can mover per timestep
 
-% Fire Fighter constants
-% Number of cells a fire fighter moves per timestep, currently must be >= 2
-fighter_speed = 2; 
-
 % Time values
-initial_tree_time = 10000;
+initial_tree_time = 100;
 initial_grass_time = 1;
 rain_wet_time = 25; % How long a cell stays wet (cant be on fire) after it rains
 
@@ -80,7 +76,7 @@ diag_wind_speeds = [S_wind * W_wind, N_wind * W_wind, S_wind * E_wind, N_wind * 
 
 % Boundary values for where to spawn fire, only spawns initially within these 
 % values
-fire_row_upper = 20;
+fire_row_upper = 100;
 fire_row_lower = 0;
 fire_col_lower = 0;
 fire_col_upper = 100;
@@ -105,10 +101,11 @@ wet_time_grids = zeros(row_count, col_count, numIterations);
 for row = 1:row_count
     for col = 1:col_count
         % Vegetation initialization 
-        if rand < prob_init_tree
+        tree_or_grass_chance = rand;
+        if  tree_or_grass_chance < prob_init_tree
             forests(row, col, 1) = TREE;
             burn_time_grids(row, col, 1) = initial_tree_time;
-        elseif rand < prob_init_grass
+        elseif  tree_or_grass_chance < prob_init_grass + prob_init_tree
             forests(row, col, 1) = GRASS;
             burn_time_grids(row, col, 1) = initial_grass_time;
         end
@@ -141,7 +138,10 @@ disp("Forest Initialized");
 
 %% Main Simulation Loop
 for frame = 2:numIterations
+    % Boolean to check for if there is a firefighter this frame so now
+    % random fire fighters get spawned if the workspace isnt cleared.
     isfirefighter = false;
+    
     %% Absorbing boundary condition
     % Create a grid thats the size of the forest + 2 on each side
     extended_grid_size = size(forests( : , : , frame-1))+2;
@@ -395,10 +395,9 @@ wet_dirt_color = [61/255, 47/255, 37/255];
 wet_grass_color = [0/255, 188/255, 100/255];
 wet_tree_color = [63/255, 122/255, 75/255];
 fighter_color = [235/255, 52/255, 192/255];
-figher_move_color = [0, 12/255, 255/255];
 
 colormap(viz_axes, [dirt_color; grass_color; tree_color; fire_color; ...
-wet_dirt_color; wet_grass_color; wet_tree_color; fighter_color; figher_move_color]); 
+wet_dirt_color; wet_grass_color; wet_tree_color; fighter_color]); 
 
 % Remove axis labels, make aspect ratio look good, and maintain that state
 axis off;
@@ -418,7 +417,7 @@ hold on;
 
 disp("Drawing...");
 for i = 1:numIterations
-    w = waitforbuttonpress;
+    %w = waitforbuttonpress;
     % Turn each forest grid into an image
     image(viz_axes, forests(:, :, i));
 
@@ -446,7 +445,7 @@ fire_count = sum(sum(forests(:,:,1)==FIRE));
 fprintf('\nNOTE: Fire can only spawn on Grass and Tree cells');
 fprintf('\nFire Spawn Prob: %f percent', prob_init_fire*100);
 fprintf('\nFire Spawned: %d/%d',fire_count, tree_count+grass_count );
-fprintf('\nWhich is %f percent of cells\n', (fire_count/(tree_count + grass_count))*100);
+fprintf('\nWhich is %f percent of vegetation cells\n', (fire_count/(tree_count + grass_count))*100);
 
 
 function [updated_rain_grid, boundary_list] = update_rain(wind_direction, grid_size, boundary_list, RAIN, move_rate)
@@ -564,4 +563,3 @@ function [updated_rain_grid, boundary_list] = update_rain(wind_direction, grid_s
     
     boundary_list = [rain_row_lower, rain_row_upper, rain_col_lower, rain_col_upper];
 end
-
