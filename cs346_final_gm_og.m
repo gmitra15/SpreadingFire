@@ -11,24 +11,24 @@
 %% Simulation Parameters %%%
 
 % Seed the random number generator for testing; saves rng settings to a var
-rng_set = rng(1234567);
+% rng_set = rng(1234567);
 
 % Time-related variables
 dt = 1; % timestep
-simLength = 100; % length of simulation
+simLength = 200; % length of simulation
 numIterations = 1 + simLength/dt;
-animation_fps = 20;
+animation_fps = 10; % frames displayed per second in visualization
 
 % Grid dimensions
 row_count = 100; % width
 col_count = 100; % length
 
 %% Constants %%
-
 % Cell values for the rain grid
 DRY = 1; % dry cell value
 RAIN = 2; % raining cell value
 
+% Cell values for the forest grid
 DIRT = 1; % Dirt cell that doesn't burn
 GRASS = 2; % Grass cell that is not on fire
 TREE = 3;  % Tree cell that is not on fire
@@ -36,51 +36,15 @@ FIRE = 4; % Cell that is on fire
 WET_DIRT = 5; % Wet dirt cell value
 WET_GRASS = 6; % Wet grass cell value
 WET_TREE = 7; % Wet tree cell values
-FIGHTER = 8; % Fire fighter cell value
+FIREFIGHTER = 8; % Fire fighter cell value
 
-prob_init_tree = 0.1; % initial probability a cell is a tree
-prob_init_grass = 0.6; % initial probability a cell is grass
-prob_init_fire = 0.025; % initial probability a tree is on fire
-prob_init_fighter = 0.001; % initial probability fire fighter spawns
+%% Initialization Probabilities %%
+prob_init_tree = 0.2; % initial probability a cell is a tree
+prob_init_grass = 0.4; % initial probability a cell is grass
+prob_init_fire = 0.0125; % initial probability a tree is on fire
+prob_init_firefighter = 0.001; % initial probability fire fighter spawns
 
-% how often the rain actually moves, higher number means slower
-rain_move_interval = 1; 
-% Amount of cells rain can move per movement interval
-rain_move_speed = 1; 
-
-% Time values
-tree_burn_time = 25; % Time that a tree will burn for
-grass_burn_time = 1; % Time that a grass will burn for
-wet_time = 5; % How long a cell stays wet (cant be on fire) after it rains
-
-% Percent increase of fire to occur for each N/E/S/W tile thats on fire,
-% e.g. 3 of them on fire = 3*cardinal_fire_chance_increase
-cardinal_fire_chance_increase = 0.35;
-
-% Same thing as cardinal increase but for diagonal cells
-diag_fire_chance_increase = 0.25;
-
-% Chance for a flaming tree to extinguish if on fire
-tree_extinguish_prob = 0.025;
-
-prob_lightning = 0.00005; % probability that a cell spontaneously ignites
-
-% Wind constants set here, 1 is default. Currently just hard coded in so use
-% realistic values, i.e if N_wind is high then S_wind should be something 
-% relatively small
-% Wind direction is what you would use if you were sailing / explaining the
-% weather, i.e. a south wind comes from the south and therefore moves north
-N_wind = 1/2;
-E_wind = 1/2;
-S_wind = 2;
-W_wind = 1/2;
-
-card_wind_speeds = [S_wind, W_wind, N_wind, E_wind];
-diag_wind_speeds = [S_wind * W_wind, N_wind * W_wind, ...
-                    S_wind * E_wind, N_wind * E_wind];
-
-num_wind_dirs = length([card_wind_speeds, diag_wind_speeds]);
-
+%% Fire Variables %%
 % Boundary values for where to spawn fire, only spawns initially within these 
 % values
 fire_row_upper = 20;
@@ -88,18 +52,62 @@ fire_row_lower = 0;
 fire_col_lower = 0;
 fire_col_upper = 100;
 
+% Burn duration variables
+tree_burn_time = 3; % Time that a tree will burn for
+grass_burn_time = 1; % Time that a grass will burn for
+
+% Fire spreading variables
+% Percent increase of fire to occur for each N/E/S/W neighbor thats on fire,
+% e.g. 3 of them on fire = 3*cardinal_fire_chance_increase
+cardinal_fire_chance_increase = 0.3;
+
+% Same thing as cardinal increase but for diagonal cells (NE/NW/SE/SW)
+diag_fire_chance_increase = 0.2;
+
+% Chance for a flaming tree to extinguish on its own
+tree_extinguish_prob = 0.025;
+
+% Prob that a forest cell is struck by lightning and spotaneously ignites
+prob_lightning = 0.00001;
+
+%% Rain variables %%
 % Boundary values for where to spawn rain, only spawns initially within these 
 % values, should be no greater than row/col size
 rain_row_lower = 0;
 rain_row_upper = 25;
-rain_col_lower = 35;
-rain_col_upper = 65;
+rain_col_lower = 1;
+rain_col_upper = 35;
 
 % List of rain boundaries that gets changed/used by rain movement
 rain_bounds = [rain_row_lower, rain_row_upper, ...
                       rain_col_lower, rain_col_upper];
 
-%% Set up grids
+wet_time = 5; % How long a cell stays wet after rain or firefighter effect
+
+% How often the rain cloud moves, higher number means slower
+% e.g. rain_move_interval = 2 means the cloud will move every 2 timesteps
+rain_move_interval = 1; 
+% Number of cells rain can move per movement interval
+rain_move_speed = 1; 
+
+%% Wind Variables %%
+% Wind constants set here, 1 is default. Currently just hard coded in so use
+% realistic values, i.e if N_wind is high then S_wind should be something 
+% relatively small
+% Wind direction is what you would use if you were sailing / explaining the
+% weather, i.e. a south wind comes from the south and therefore moves north
+N_wind = 1;
+E_wind = 1;
+S_wind = 2;
+W_wind = 2;
+
+card_wind_speeds = [S_wind, W_wind, N_wind, E_wind];
+diag_wind_speeds = [S_wind * W_wind, N_wind * W_wind, ...
+                    S_wind * E_wind, N_wind * E_wind];
+
+num_wind_dirs = length([card_wind_speeds, diag_wind_speeds]);
+
+%% Set up grids %%
 % Initialize forest to be all dirt
 forest_grids = ones(row_count, col_count, numIterations) * DIRT;
 % Intialize burn grids to be zero because nothing is burning yet
@@ -109,16 +117,20 @@ rain_grids = ones(row_count, col_count, numIterations) * DRY;
 % Initialize wet grids to all zero because nothing is wet yet
 wet_time_grids = zeros(row_count, col_count, numIterations);
 
+% Loop over the grids
 for row = 1:row_count
     for col = 1:col_count
-        % Vegetation initialization 
+    
+        % Vegetation initialization
         tree_or_grass_chance = rand;
-        % Checking for tr33s
+        % Setting some cells to trees
         if  tree_or_grass_chance < prob_init_tree
             forest_grids(row, col, 1) = TREE;
             burn_time_grids(row, col, 1) = tree_burn_time;
-
-        % Now checking for grass
+            
+        % Setting some cells to grass
+        % Is a sum of tree and grass prob because values from 
+        % 0 to prob_init_tree become trees in the previous condition
         elseif  tree_or_grass_chance < prob_init_grass + prob_init_tree
             forest_grids(row, col, 1) = GRASS;
             burn_time_grids(row, col, 1) = grass_burn_time;
@@ -127,7 +139,6 @@ for row = 1:row_count
         % Fire initilization, can only spawn on vegetation
         if forest_grids(row, col, 1) == TREE || ...
            forest_grids(row, col, 1) == GRASS
-
             if rand < prob_init_fire % Set a percentage of the veg to be lit
                 % Making fire spawn within fire bounds
                 if( (row > fire_row_lower && row < fire_row_upper)... 
@@ -146,25 +157,26 @@ for row = 1:row_count
 
         % Initializing fire fighters
         % Spawning fire fighters with their spawn prob
-        if(rand < prob_init_fighter)
-            forest_grids(row, col, 1) = FIGHTER;
+        if(rand < prob_init_firefighter)
+            forest_grids(row, col, 1) = FIREFIGHTER;
         end
 
     end
 end
-
-disp("Forest Initialized");
+disp("All grids initialized");
 
 %% Main Simulation Loop
 for frame = 2:numIterations
-    % Boolean to check for if there is a fire fighter this frame so no
+    % Boolean to check for if there is a fire fighter in this frame so no
     % random fire fighters get spawned if the workspace isnt cleared.
-    isfirefighter = false;
+    % Only relevant if firefighter probability > 0 in one simulation run
+    % and then is set to zero in the following run
+    has_firefighter = false;
     
     %% Absorbing boundary condition
     % Create grids that are the size of the forest + 2 on each side
     extended_grid_size = size(forest_grids( : , : , frame-1))+2;
-    extended_forest_grid = ones(extended_grid_size) * DIRT; % initialize all as dirt
+    extended_forest_grid = ones(extended_grid_size) * DIRT; % init all as dirt
     extended_rain_grid = ones(extended_grid_size) * DRY; % init all as dry
     
     % Set the inside portion of the grids equal to the corresponding values from
@@ -177,27 +189,29 @@ for frame = 2:numIterations
     wet_time_grid = wet_time_grids(:,:,frame-1);
 
     
-    % Rain cloud movement based on the wind
+    %% Rain cloud movement based on the wind
     % If we want to move the rain clouds this frame and there is wind
     % If all cardinal wind values = 1 (i.e. no wind), this condition is skipped
     if(mod(frame, rain_move_interval) == 0 && ... 
        sum([card_wind_speeds, diag_wind_speeds]) ~= num_wind_dirs)
 
-        % Getting the wind direction, which is just the max value of our winds
+        % Wind direction is determined by the direction with max wind speed
         [val, wind_dir] = max([card_wind_speeds, diag_wind_speeds]);
         
-        % Updating the rain grid
+        % Updating (i.e. moving) the rain grid
         [updated_rain_grid, updated_rain_bounds] = update_rain(wind_dir, ...
         extended_grid_size, rain_bounds, RAIN, rain_move_speed);
+    
         % Updating the current boundaries of the rain area
         rain_bounds = updated_rain_bounds;
     else
-        % If rain didnt update this time step
+        % If rain didnt update this time step, keep it the same
         updated_rain_grid = extended_rain_grid;
     end
+    % Set new rain grid frame to the inside values (i.e. non-extended)
     rain_grids(:, :, frame) = updated_rain_grid(2:end-1, 2:end-1);
     
-    %% Loop for updating each cell in the grid
+    %% Loop for updating each cell in the forest
     % Loop over the indices corresponding to the original (non-extended) grid
     for row = 2:row_count + 1
         for col = 2:col_count + 1
@@ -249,7 +263,7 @@ for frame = 2:numIterations
                 
                 % If neighboring a fire fighter then put out andturn to whatever 
                 % the wet tile should be, based on burn time.  
-                if(sum(neighbors == FIGHTER) ~= 0)
+                if(sum(neighbors == FIREFIGHTER) ~= 0)
                     % Set the wet time of this sell to wet_time
                     wet_time_cell = wet_time; 
 
@@ -354,10 +368,10 @@ for frame = 2:numIterations
             end
 
             % If cell is a fire fighter
-            if(forest_cell == FIGHTER)
+            if(forest_cell == FIREFIGHTER)
                 % Bool to check for if there is a fire fighter this frame so no
                 % random fire fighters get spawned if the workspace isnt cleared
-                isfirefighter = true;
+                has_firefighter = true;
 
                 % Find the closest fire
 
@@ -368,13 +382,13 @@ for frame = 2:numIterations
                     find((forest_grids( : , : , frame-1)) == FIRE));
 
                     
-                % Calculate Euclidean distance of this point to all fires
+                % Calculate Euclidean distance of curent cell to all fires
                 % Must adjust row, col values throughout this conditional
-                % to account for grid-extension
+                % to account for grid-extension (i.e. subtract 1)
                 row_distances = (row-1) - fire_row_locations;
                 col_distances = (col-1) - fire_col_locations;
                 % Lowest value in this list will be the "closest fire"
-                distance_list = [sqrt(row_distances.^2 + col_distances.^2)];
+                distance_list = sqrt(row_distances.^2 + col_distances.^2);
 
                 % Get the index of the closest fire to find the final position
                 % of the fire we want to move to
@@ -386,13 +400,14 @@ for frame = 2:numIterations
                 fire_col = fire_col_locations(closest_fire_idx);
 
                 % Variables for where the updated position of the FF will be
+                % subtract 1 to account for grid-extension
                 ff_dest_row = row-1;
                 ff_dest_col = col-1;
                 
                 % Shift the FF location based on the direction from destination
                 % point - current position point
-                ff_dest_row = ff_dest_row + sign(fire_row - row);
-                ff_dest_col = ff_dest_col + sign(fire_col - col);
+                ff_dest_row = ff_dest_row + sign(fire_row - (row-1));
+                ff_dest_col = ff_dest_col + sign(fire_col - (col-1));
 
                 % Constraining movement to the bounds of the forest grid
                 if(ff_dest_row < 1)
@@ -419,9 +434,9 @@ for frame = 2:numIterations
             % forest grid being pushed down and to the right by one unit
             % from the extension
             forest_grids(row - 1, col - 1, frame) = updated_forest_cell;
-            if(isfirefighter) % If there is a fire fighter this frame
+            if(has_firefighter) % If there is a fire fighter this frame
                 % Update the current fire fighters position
-                forest_grids(ff_dest_row, ff_dest_col, frame) = FIGHTER;
+                forest_grids(ff_dest_row, ff_dest_col, frame) = FIREFIGHTER;
             end
 
             % Do the same as with forest_grids for these two grids
@@ -509,11 +524,13 @@ function [updated_rain_grid, rain_bounds] = update_rain(...
           wind_direction, grid_size, rain_bounds, RAIN, move_rate)
     % Initialize new rain grid
     updated_rain_grid = ones(grid_size);
+    
     % Get values of current rain boundaries
     rain_row_lower = rain_bounds(1);
     rain_row_upper = rain_bounds(2);
     rain_col_lower = rain_bounds(3);
     rain_col_upper = rain_bounds(4);
+    
     % Get row and col counts
     row_count = grid_size(1);
     col_count = grid_size(2);
