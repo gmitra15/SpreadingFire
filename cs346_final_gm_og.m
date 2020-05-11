@@ -17,6 +17,8 @@
 dt = 1; % timestep
 simLength = 200; % length of simulation
 numIterations = 1 + simLength/dt;
+
+frame_by_frame = true; % if turned on, you can click through animation
 animation_fps = 10; % frames displayed per second in visualization
 
 % Grid dimensions
@@ -96,10 +98,10 @@ rain_move_speed = 1;
 % relatively small
 % Wind direction is what you would use if you were sailing / explaining the
 % weather, i.e. a south wind comes from the south and therefore moves north
-N_wind = 1;
-E_wind = 1;
-S_wind = 2;
-W_wind = 2;
+N_wind = 2/3;
+E_wind = 2/3;
+S_wind = 1.5;
+W_wind = 1.5;
 
 card_wind_speeds = [S_wind, W_wind, N_wind, E_wind];
 diag_wind_speeds = [S_wind * W_wind, N_wind * W_wind, ...
@@ -367,7 +369,7 @@ for frame = 2:numIterations
                 end
             end
 
-            % If cell is a fire fighter
+            %% If cell is a fire fighter
             if(forest_cell == FIREFIGHTER)
                 % Bool to check for if there is a fire fighter this frame so no
                 % random fire fighters get spawned if the workspace isnt cleared
@@ -408,6 +410,11 @@ for frame = 2:numIterations
                 % point - current position point
                 ff_dest_row = ff_dest_row + sign(fire_row - (row-1));
                 ff_dest_col = ff_dest_col + sign(fire_col - (col-1));
+                
+                if isempty(distance_list)
+                    ff_dest_row = row-1;
+                    ff_dest_col = col-1;
+                end
 
                 % Constraining movement to the bounds of the forest grid
                 if(ff_dest_row < 1)
@@ -475,8 +482,10 @@ hold on;
 disp("Drawing...");
 for i = 1:numIterations
     
-    % Following line allows for frame-by-frame viewing of forest grid
-    %w = waitforbuttonpress;
+    % Allows for frame-by-frame viewing of forest grid
+    if frame_by_frame
+        w = waitforbuttonpress;
+    end
 
     % Turn each forest grid into an image
     image(viz_axes, forest_grids(:, :, i));
