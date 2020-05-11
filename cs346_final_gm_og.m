@@ -19,7 +19,9 @@ simLength = 200; % length of simulation
 numIterations = 1 + simLength/dt;
 
 frame_by_frame = true; % if turned on, you can click through animation
-animation_fps = 10; % frames displayed per second in visualization
+animation_fps = 30; % frames displayed per second in visualization
+
+stats_mode = false; % if true, no visualization -- easier for collecting stats
 
 % Grid dimensions
 row_count = 100; % width
@@ -44,7 +46,7 @@ FIREFIGHTER = 8; % Fire fighter cell value
 prob_init_tree = 0.2; % initial probability a cell is a tree
 prob_init_grass = 0.4; % initial probability a cell is grass
 prob_init_fire = 0.0125; % initial probability a tree is on fire
-prob_init_firefighter = 0.001; % initial probability fire fighter spawns
+prob_init_firefighter = 0.000; % initial probability fire fighter spawns
 
 %% Fire Variables %%
 % Boundary values for where to spawn fire, only spawns initially within these 
@@ -70,7 +72,7 @@ diag_fire_chance_increase = 0.2;
 tree_extinguish_prob = 0.025;
 
 % Prob that a forest cell is struck by lightning and spotaneously ignites
-prob_lightning = 0.00001;
+prob_lightning = 0.00000;
 
 %% Rain variables %%
 % Boundary values for where to spawn rain, only spawns initially within these 
@@ -455,69 +457,84 @@ for frame = 2:numIterations
 end
 disp("All forest_grids calculated");
 
-%% Visualize the grid
+if stats_mode == false
+    %% Visualize the grid
 
-% Create the window for the animation
-viz_fig = figure;
-viz_axes = axes(viz_fig);
+    % Create the window for the animation
+    viz_fig = figure;
+    viz_axes = axes(viz_fig);
 
-% Set the colors
-dirt_color = [0.4, 0.2, 0];
-grass_color = [109/255, 188/255, 0];
-tree_color = [63/255, 122/255, 0];
-fire_color = [237/255 41/255 57/255];
-wet_dirt_color = [61/255, 47/255, 37/255];
-wet_grass_color = [0/255, 188/255, 100/255];
-wet_tree_color = [63/255, 122/255, 75/255];
-fighter_color = [251/255, 255/255, 0/255];
+    % Set the colors
+    dirt_color = [0.4, 0.2, 0];
+    grass_color = [109/255, 188/255, 0];
+    tree_color = [63/255, 122/255, 0];
+    fire_color = [237/255 41/255 57/255];
+    wet_dirt_color = [61/255, 47/255, 37/255];
+    wet_grass_color = [0/255, 188/255, 100/255];
+    wet_tree_color = [63/255, 122/255, 75/255];
+    fighter_color = [251/255, 255/255, 0/255];
 
-colormap(viz_axes, [dirt_color; grass_color; tree_color; fire_color; ...
-wet_dirt_color; wet_grass_color; wet_tree_color; fighter_color]); 
+    colormap(viz_axes, [dirt_color; grass_color; tree_color; fire_color; ...
+    wet_dirt_color; wet_grass_color; wet_tree_color; fighter_color]); 
 
-% Remove axis labels, make aspect ratio look good, and maintain that state
-axis off;
-axis equal;
-hold on;
+    % Remove axis labels, make aspect ratio look good, and maintain that state
+    axis off;
+    axis equal;
+    hold on;
 
-disp("Drawing...");
-for i = 1:numIterations
-    
-    % Allows for frame-by-frame viewing of forest grid
-    if frame_by_frame
-        w = waitforbuttonpress;
+    disp("Drawing...");
+    for i = 1:numIterations
+
+        % Allows for frame-by-frame viewing of forest grid
+        if frame_by_frame
+            w = waitforbuttonpress;
+        end
+
+        title(viz_axes, 'Frame: ' + string(i))
+
+        % Turn each forest grid into an image
+        image(viz_axes, forest_grids(:, :, i));
+
+        pause(1/animation_fps);
     end
-
-    % Turn each forest grid into an image
-    image(viz_axes, forest_grids(:, :, i));
-
-    pause(1/animation_fps);
 end
+
 
 disp("Simulation complete!");
 
 
 % Some Validation Testing for spawn percentages based on probabilities
 
-tree_count = sum(sum(forest_grids(:,:,1)==TREE));
+init_tree_count = sum(forest_grids(:,:,1)==TREE, 'all');
 fprintf('\nTree Spawn Prob: %f percent', prob_init_tree*100);
-fprintf('\nTrees Spawned: %d/%d',tree_count, row_count*col_count );
+fprintf('\nTrees Spawned: %d/%d',init_tree_count, row_count*col_count );
 fprintf('\nWhich is %f percent of cells\n', ...
-        (tree_count/(row_count*col_count))*100);
+        (init_tree_count/(row_count*col_count))*100);
 
-grass_count = sum(sum(forest_grids(:,:,1)==GRASS));
+init_grass_count = sum(forest_grids(:,:,1)==GRASS, 'all');
 fprintf('\nGrass Spawn Prob: %f percent', prob_init_grass*100);
-fprintf('\nGrass Spawned: %d/%d',grass_count, row_count*col_count );
+fprintf('\nGrass Spawned: %d/%d',init_grass_count, row_count*col_count );
 fprintf('\nWhich is %f percent of cells\n', ...
-        (grass_count/(row_count*col_count))*100);
+        (init_grass_count/(row_count*col_count))*100);
 
-fire_count = sum(sum(forest_grids(:,:,1)==FIRE));
+fire_count = sum(forest_grids(:,:,1)==FIRE, 'all');
 fprintf('\nNOTE: Fire can only spawn on Grass or Tree cells and within spawn');
 fprintf(' boundaries. \nBased on boundaries could be significantly ');
 fprintf('less than spawn prob');
 fprintf('\nFire Spawn Prob: %f percent', prob_init_fire*100);
-fprintf('\nFire Spawned: %d/%d',fire_count, tree_count+grass_count );
+fprintf('\nFire Spawned: %d/%d',fire_count, init_tree_count+init_grass_count );
 fprintf('\nWhich is %f percent of vegetation cells\n', ...
-        (fire_count/(tree_count + grass_count))*100);
+        (fire_count/(init_tree_count + init_grass_count))*100);
+
+final_tree_count = sum(forest_grids(:,:,end)==TREE, 'all');
+final_grass_count = sum(forest_grids(:,:,end)==GRASS, 'all');
+fprintf('\n Percentage of trees burned: %.2f percent',...
+    100 * final_tree_count/init_tree_count)
+fprintf('\n Percentage of grass burned: %.2f percent',...
+    100 * final_grass_count/init_grass_count)
+fprintf('\n Percentage of foliage burned: %.2f percent\n', ...
+     100 * ((final_grass_count+final_tree_count)/...
+     (init_tree_count+init_grass_count)))
 
 
 % update_rain will update the boundaries of the the rain cloud based on the 
