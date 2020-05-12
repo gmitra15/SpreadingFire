@@ -11,14 +11,14 @@
 %% Simulation Parameters %%%
 
 % Seed the random number generator for testing; saves rng settings to a var
-% rng_set = rng(1234567);
+rng_set = rng(1234567);
 
 % Time-related variables
 dt = 1; % timestep
 simLength = 200; % length of simulation
 numIterations = 1 + simLength/dt;
 
-frame_by_frame = true; % if turned on, you can click through animation
+frame_by_frame = false; % if turned on, you can click through animation
 animation_fps = 30; % frames displayed per second in visualization
 
 stats_mode = false; % if true, no visualization -- easier for collecting stats
@@ -43,10 +43,10 @@ WET_TREE = 7; % Wet tree cell values
 FIREFIGHTER = 8; % Fire fighter cell value
 
 %% Initialization Probabilities %%
-prob_init_tree = 0.2; % initial probability a cell is a tree
-prob_init_grass = 0.4; % initial probability a cell is grass
-prob_init_fire = 0.0125; % initial probability a tree is on fire
-prob_init_firefighter = 0.000; % initial probability fire fighter spawns
+prob_init_tree = 0.1; % initial probability a cell is a tree
+prob_init_grass = 0.6; % initial probability a cell is grass
+prob_init_fire = 0.0250; % initial probability a tree is on fire
+prob_init_firefighter = 0.003; % initial probability fire fighter spawns
 
 %% Fire Variables %%
 % Boundary values for where to spawn fire, only spawns initially within these 
@@ -63,10 +63,10 @@ grass_burn_time = 1; % Time that a grass will burn for
 % Fire spreading variables
 % Percent increase of fire to occur for each N/E/S/W neighbor thats on fire,
 % e.g. 3 of them on fire = 3*cardinal_fire_chance_increase
-cardinal_fire_chance_increase = 0.3;
+cardinal_fire_chance_increase = 0.5;
 
 % Same thing as cardinal increase but for diagonal cells (NE/NW/SE/SW)
-diag_fire_chance_increase = 0.2;
+diag_fire_chance_increase = 0.3;
 
 % Chance for a flaming tree to extinguish on its own
 tree_extinguish_prob = 0.025;
@@ -77,16 +77,16 @@ prob_lightning = 0.00000;
 %% Rain variables %%
 % Boundary values for where to spawn rain, only spawns initially within these 
 % values, should be no greater than row/col size
-rain_row_lower = 0;
-rain_row_upper = 25;
+rain_row_lower = 35;
+rain_row_upper = 65;
 rain_col_lower = 1;
-rain_col_upper = 35;
+rain_col_upper = 15;
 
 % List of rain boundaries that gets changed/used by rain movement
 rain_bounds = [rain_row_lower, rain_row_upper, ...
                       rain_col_lower, rain_col_upper];
 
-wet_time = 5; % How long a cell stays wet after rain or firefighter effect
+wet_time = 8; % How long a cell stays wet after rain or firefighter effect
 
 % How often the rain cloud moves, higher number means slower
 % e.g. rain_move_interval = 2 means the cloud will move every 2 timesteps
@@ -102,8 +102,8 @@ rain_move_speed = 1;
 % weather, i.e. a south wind comes from the south and therefore moves north
 N_wind = 2/3;
 E_wind = 2/3;
-S_wind = 1.5;
-W_wind = 1.5;
+S_wind = 2/3;
+W_wind = 2;
 
 card_wind_speeds = [S_wind, W_wind, N_wind, E_wind];
 diag_wind_speeds = [S_wind * W_wind, N_wind * W_wind, ...
@@ -505,19 +505,19 @@ disp("Simulation complete!");
 
 % Some Validation Testing for spawn percentages based on probabilities
 
-init_tree_count = sum(forest_grids(:,:,1)==TREE, 'all');
+init_tree_count = sum(sum(forest_grids(:,:,1)==TREE));
 fprintf('\nTree Spawn Prob: %f percent', prob_init_tree*100);
 fprintf('\nTrees Spawned: %d/%d',init_tree_count, row_count*col_count );
 fprintf('\nWhich is %f percent of cells\n', ...
         (init_tree_count/(row_count*col_count))*100);
 
-init_grass_count = sum(forest_grids(:,:,1)==GRASS, 'all');
+init_grass_count = sum(sum(forest_grids(:,:,1)==GRASS));
 fprintf('\nGrass Spawn Prob: %f percent', prob_init_grass*100);
 fprintf('\nGrass Spawned: %d/%d',init_grass_count, row_count*col_count );
 fprintf('\nWhich is %f percent of cells\n', ...
         (init_grass_count/(row_count*col_count))*100);
 
-fire_count = sum(forest_grids(:,:,1)==FIRE, 'all');
+fire_count = sum(sum(forest_grids(:,:,1)==FIRE));
 fprintf('\nNOTE: Fire can only spawn on Grass or Tree cells and within spawn');
 fprintf(' boundaries. \nBased on boundaries could be significantly ');
 fprintf('less than spawn prob');
@@ -526,15 +526,15 @@ fprintf('\nFire Spawned: %d/%d',fire_count, init_tree_count+init_grass_count );
 fprintf('\nWhich is %f percent of vegetation cells\n', ...
         (fire_count/(init_tree_count + init_grass_count))*100);
 
-final_tree_count = sum(forest_grids(:,:,end)==TREE, 'all');
-final_grass_count = sum(forest_grids(:,:,end)==GRASS, 'all');
+final_tree_count = sum(sum(forest_grids(:,:,end)==TREE));
+final_grass_count = sum(sum(forest_grids(:,:,end)==GRASS));
 fprintf('\n Percentage of trees burned: %.2f percent',...
-    100 * final_tree_count/init_tree_count)
+    100 * (1 - final_tree_count/init_tree_count))
 fprintf('\n Percentage of grass burned: %.2f percent',...
-    100 * final_grass_count/init_grass_count)
+    100 * (1-final_grass_count/init_grass_count))
 fprintf('\n Percentage of foliage burned: %.2f percent\n', ...
-     100 * ((final_grass_count+final_tree_count)/...
-     (init_tree_count+init_grass_count)))
+     100 * (1-((final_grass_count+final_tree_count)/...
+     (init_tree_count+init_grass_count))))
 
 
 % update_rain will update the boundaries of the the rain cloud based on the 
